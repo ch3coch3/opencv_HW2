@@ -34,9 +34,6 @@ def corner(img,k,nx,ny):
     extrinsic = np.concatenate([rvecs, tvecs],axis=1)
     return mtx,dist,extrinsic
 
-def calibrate(nx,ny):
-    pass
-
 
 
 if __name__=='__main__':
