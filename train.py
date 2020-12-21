@@ -3,10 +3,36 @@ import torch.nn as nn
 import torchvision
 import torchvision.transforms as transforms
 from torchvision import models
-from torch.utils.data import SubsetRandomSampler
+from torch.utils.data import SubsetRandomSampler, Dataset
+import os
+# from torch.utils.tensorboard import SummaryWriter
 from resnet import resnet50
 from tqdm import tqdm 
+from PIL import Image
 
+class customDataset(Dataset):
+    def __init__(self,root_dir ,transform = None):
+        self.transform = transform
+        self.root_dir = root_dir
+        self.dog_path = os.listdir("./kagglecatsanddogs_3367a/PetImages/Dog")
+        self.cat_path = os.listdir("./kagglecatsanddogs_3367a/PetImages/Cat")
+        # print(self.dog_path)
+    def __len__(self):
+        return len(self.dog_path) + len(self.cat_path) -2
+
+    def __getitem__(self,index):
+        for root,_,files in os.walk(self.root_dir):
+            for File in files:
+                if File.endswith('.jpg'):
+                    filename = os.path.join(root,File)
+                    category_name = os.path.basename(root)
+                    image = Image.open(filename)
+                    if self.transform:
+                        image = self.transform(image)
+                    if category_name == 'Cat':
+                        return (image, torch.tensor(1))
+                    elif category_name == 'Dog':
+                        return (image, torch.tensor(0))
 
 def train_step(model, loader):
     model.train()
@@ -35,7 +61,6 @@ def train_step(model, loader):
     acc = accuraccy(outputs, targets)        
     training_acc.append(acc)
 
-    self.scheduler.step()
 
     torch.save({'state_dict': model.state_dict()}, './model.pth')
     return acc, epoch_loss
@@ -98,8 +123,14 @@ if __name__ == '__main__':
         transforms.ToTensor()
     ])
 
-    train_dataset = torchvision.datasets.CIFAR10(root='./CIFAR10',train=True, transform=transform,download=True)
-    test_dataset = torchvision.datasets.CIFAR10(root='./CIFAR10',train=False, transform=transforms.ToTensor())
+    dataset = customDataset("./kagglecatsanddogs_3367a/PetImages/",transform = transform)
+
+    train_dataset, test_dataset = torch.utils.data.random_split(dataset,[20000,5000])
+
+    # train_dataset = torchvision.datasets.CIFAR10(root='./CIFAR10',train=True, transform=transform,download=True)
+    # test_dataset = torchvision.datasets.CIFAR10(root='./CIFAR10',train=False, transform=transforms.ToTensor())
+    # train_dataset = customDataset(train=True, transform=True)
+    # test_dataset = customDataset(train=False, transform=True)
 
     # data loader
     # split = int(len(train_dataset)*0.9)
@@ -107,17 +138,24 @@ if __name__ == '__main__':
                                             batch_size=batch_size,
                                             shuffle=True)
 
-    # val_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                            # batch_size=batch_size,
-                                            # shuffle=True)
-
 
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
                                             batch_size=batch_size,
                                             shuffle=False)
 
+
+
     model = resnet50()
     model.cuda()
+
+    # # tensor board
+    # writer = SummaryWriter()
+    # image, labels = next(iter(train_loader))
+    # grid = torchvision.utils.make_grid(image)
+    # writer.add_image('images',grid,0)
+    # writer.add_graph(model,image)
+    # writer.close()
+    
     # Loss and optimizer
     optimizer = torch.optim.SGD(params=model.parameters(),lr=learning_rate,momentum=0.9,weight_decay=5e-4)
     criterion = nn.CrossEntropyLoss()
@@ -132,5 +170,5 @@ if __name__ == '__main__':
         train_acc, train_loss = train_step(model, train_loader)
         # val_acc, val_loss = validate(model, val_loader, 'val')
         test_acc = validate(model, test_loader, 'test')
-        print('Training loss: {:.3f}, training acc: {:.3f}; Val loss: {:.3f}, Val acc: {:.3f}; Testing acc: {:.3f}'.format(train_loss, train_acc, test_acc))            
+        print('Training loss: {:.3f}, training acc: {:.3f}; Testing acc: {:.3f}'.format(train_loss, train_acc, test_acc))            
 
