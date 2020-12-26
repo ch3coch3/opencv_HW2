@@ -9,6 +9,7 @@ from PIL import Image
 from resnet import resnet50
 from tqdm import tqdm 
 from matplotlib import pyplot as plt
+import random
 import numpy as np
 
 # class customDataset(Dataset):
@@ -82,20 +83,33 @@ class customDataset(Dataset):
     def __len__(self):
         return len(self.dog_path) + len(self.cat_path) -2
 
-    def __getitem__(self,index):
-        for root,_,files in os.walk(self.root_dir):
-            for File in files:
-                if File.endswith('.jpg'):
-                    filename = os.path.join(root,File)
-                    print(filename)
-                    category_name = os.path.basename(root)
-                    image = Image.open(filename)
-                    if self.transform:
-                        image = self.transform(image)
-                    if category_name == 'Cat':
-                        return (image, torch.tensor(1))
-                    elif category_name == 'Dog':
-                        return (image, torch.tensor(0))
+    def __getitem__(self,index): 
+        t = 0
+        while t == 0:
+            k = random.randint(0,1)
+            if k == 1:
+                file_size = os.path.getsize(os.path.join(self.root_dir,'Cat',self.cat_path[int(index/2)]))
+                if file_size >= 10:
+                    if self.cat_path[int(index/2)].endswith('.jpg'):
+                        image = Image.open(os.path.join(self.root_dir,'Cat',self.cat_path[int(index/2)]))
+                        if image.mode != "RGB" or self.cat_path[int(index/2)] == "11702.jpg":
+                            index = index + 1
+                            continue
+                        t = 1
+                        return (self.transform(image), torch.tensor(1))
+                index = index + 1
+            elif k == 0:
+                file_size = os.path.getsize(os.path.join(self.root_dir,'Dog',self.dog_path[int(index/2)]))
+                if file_size >= 10:
+                    if self.dog_path[int(index/2)].endswith('.jpg'):
+                        image = Image.open(os.path.join(self.root_dir,'Dog',self.dog_path[int(index/2)]))
+                        if image.mode != "RGB" or self.dog_path[int(index/2)] == "11702.jpg":
+                            index = index + 1
+                            continue
+                        t = 1
+                        return (self.transform(image), torch.tensor(0))
+                index = index + 1
+
  
 def predict(img_path):
     net = torch.load('model.pth')
@@ -109,14 +123,23 @@ def predict(img_path):
     plt.show(img)
     plt.title(predicted[0])
 
+def imshow(img):
+    img = img / 2 +0.5
+    npimg = img.numpy()
+    plt.imshow(np.transpose(npimg,(1,2,0)))
+    plt.show()
+
 if __name__ == '__main__':
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     # # data preprocessor
     transform = transforms.Compose([
         transforms.Resize(224),
         # transforms.Pad(4),
         transforms.RandomHorizontalFlip(),
         transforms.RandomCrop(224),
-        transforms.ToTensor()
+        transforms.ToTensor(),
+        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     ])
 
     dataset = customDataset("./kagglecatsanddogs_3367a/PetImages/",transform = transform)
@@ -127,14 +150,30 @@ if __name__ == '__main__':
     # # cat_label = temp[3]
 
     train_set, test_set = torch.utils.data.random_split(dataset,[20000,5000])
-    train_loader = DataLoader(dataset=train_set, batch_size=8,shuffle=True)
-    test_loader = DataLoader(dataset=test_set, batch_size=8, shuffle=True)
-    dataiter = iter(test_loader)
-    image,labels = dataiter.next()
-    img = Image.open(image)
+    train_loader = DataLoader(dataset=train_set, batch_size=8,shuffle=True,num_workers=4)
+    test_loader = DataLoader(dataset=test_set, batch_size=8, shuffle=True,num_workers=4)
     
-    # predict(image)
-    # train_loader = DataLoader(dataset=train_set, batch_size=8,shuffle=True)
-    # test_loader = DataLoader(dataset=test_set, batch_size=8, shuffle=True)
+    model = resnet50(num_classes = 2)
+    model.load_state_dict(torch.load('model.pth')['state_dict'])
+    model.eval()
+    with torch.no_grad():
+        for image, label in test_loader:
+            outputs = model(image)
+            print(outputs)
+            _, predicted = torch.max(torch.abs(outputs), 1)
+            print(outputs)
+            print(predicted)
+            choose = predicted[0].item()
+            plt.xticks([])
+            plt.yticks([])
+            plt.imshow(torchvision.utils.make_grid(image[0]).permute(1,2,0))
+            if choose == 1:
+                plt.title('class:'+'cat')
+            elif choose == 0:
+                plt.title('class:'+'dog')
+            plt.show()
+            break
+
+
 
     

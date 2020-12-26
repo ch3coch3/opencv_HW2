@@ -5,7 +5,9 @@ import torchvision.transforms as transforms
 from torchvision import models
 from torch.utils.data import SubsetRandomSampler, Dataset
 import os
-# from torch.utils.tensorboard import SummaryWriter
+import random
+import numpy as np
+from torch.utils.tensorboard import SummaryWriter
 from resnet import resnet50
 from tqdm import tqdm 
 from PIL import Image
@@ -20,25 +22,40 @@ class customDataset(Dataset):
     def __len__(self):
         return len(self.dog_path) + len(self.cat_path) -2
 
-    def __getitem__(self,index):
-        for root,_,files in os.walk(self.root_dir):
-            for File in files:
-                if File.endswith('.jpg'):
-                    filename = os.path.join(root,File)
-                    category_name = os.path.basename(root)
-                    image = Image.open(filename)
-                    if self.transform:
-                        image = self.transform(image)
-                    if category_name == 'Cat':
-                        return (image, torch.tensor(1))
-                    elif category_name == 'Dog':
-                        return (image, torch.tensor(0))
+    def __getitem__(self,index): 
+        t = 0
+        while t == 0:
+            k = random.randint(0,1)
+            if k == 1:
+                file_size = os.path.getsize(os.path.join(self.root_dir,'Cat',self.cat_path[int(index/2)]))
+                if file_size >= 10:
+                    if self.cat_path[int(index/2)].endswith('.jpg'):
+                        image = Image.open(os.path.join(self.root_dir,'Cat',self.cat_path[int(index/2)]))
+                        if image.mode != "RGB" or self.cat_path[int(index/2)] == "11702.jpg":
+                            index = index + 1
+                            continue
+                        t = 1
+                        return (self.transform(image), torch.tensor(1))
+                index = index + 1
+            elif k == 0:
+                file_size = os.path.getsize(os.path.join(self.root_dir,'Dog',self.dog_path[int(index/2)]))
+                if file_size >= 10:
+                    if self.dog_path[int(index/2)].endswith('.jpg'):
+                        image = Image.open(os.path.join(self.root_dir,'Dog',self.dog_path[int(index/2)]))
+                        if image.mode != "RGB" or self.dog_path[int(index/2)] == "11702.jpg":
+                            index = index + 1
+                            continue
+                        t = 1
+                        return (self.transform(image), torch.tensor(0))
+                index = index + 1
 
 def train_step(model, loader):
+    global time
     model.train()
     loss_seq = []
     outputs_list = []
     targets_list = []
+    # j = 1
     iterator = tqdm(loader, desc='Training:', bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]')
     for inputs, targets in iterator:
         inputs, targets = inputs.to(device), targets.to(device)
@@ -49,9 +66,11 @@ def train_step(model, loader):
         loss_seq.append(loss.item())
         loss.backward()
         optimizer.step()
-
+        writer.add_scalar("train_accuracy",accuraccy(outputs,targets),time)
+        writer.add_scalar("train_loss", loss,time)
         outputs_list.append(outputs)
         targets_list.append(targets)
+        time = time + 1
     
     epoch_loss = sum(loss_seq) / len(loss_seq)
     train_loss_list.append(epoch_loss)
@@ -108,19 +127,26 @@ def accuraccy(outputs, targets):
     return acc
 
 if __name__ == '__main__':
+    
+    global time
+    time = 1
     device = torch.device('cuda'if torch.cuda.is_available() else 'cpu')
     # hyper parameters
     num_epochs = 5
-    batch_size = 16
+    batch_size = 8
     learning_rate = 0.001
 
     # data preprocessor
     transform = transforms.Compose([
-        transforms.Resize(224),
+        # transforms.Grayscale(1),
+        # transforms.ToPILImage(mode='RGB'),
+        transforms.Resize([224,224]),
         # transforms.Pad(4),
         transforms.RandomHorizontalFlip(),
         transforms.RandomCrop(224),
-        transforms.ToTensor()
+        transforms.ToTensor(),
+        # transforms.Lambda(lambda x: x.repeat(3,1,1)),
+        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     ])
 
     dataset = customDataset("./kagglecatsanddogs_3367a/PetImages/",transform = transform)
@@ -136,20 +162,20 @@ if __name__ == '__main__':
     # split = int(len(train_dataset)*0.9)
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
                                             batch_size=batch_size,
-                                            shuffle=True)
+                                            shuffle=True,num_workers=4)
 
 
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
                                             batch_size=batch_size,
-                                            shuffle=False)
+                                            shuffle=False,num_workers=4)
 
 
 
-    model = resnet50()
+    model = resnet50(num_classes = 2)
     model.cuda()
 
     # # tensor board
-    # writer = SummaryWriter()
+    writer = SummaryWriter()
     # image, labels = next(iter(train_loader))
     # grid = torchvision.utils.make_grid(image)
     # writer.add_image('images',grid,0)
@@ -165,10 +191,15 @@ if __name__ == '__main__':
     val_loss_list = []
     val_acc = []
     testing_acc = []
+    f = open('training_result.txt','w')
     for epoch in range(num_epochs):
         print('---------- Epoch {} ------------'.format(epoch+1))            
         train_acc, train_loss = train_step(model, train_loader)
+        # writer.add_scalar("train_accuracy",train_acc,epoch)
+        # writer.add_scalar("train_loss", train_loss,epoch)
         # val_acc, val_loss = validate(model, val_loader, 'val')
         test_acc = validate(model, test_loader, 'test')
+        f.write('Training loss: {:.3f}, training acc: {:.3f}; Testing acc: {:.3f} \n'.format(train_loss, train_acc, test_acc))
         print('Training loss: {:.3f}, training acc: {:.3f}; Testing acc: {:.3f}'.format(train_loss, train_acc, test_acc))            
-
+    f.close()
+    writer.close()
