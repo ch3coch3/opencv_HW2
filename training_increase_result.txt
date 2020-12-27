@@ -1,0 +1,5 @@
+Training loss: 0.717, training acc: 60.341; Testing acc: 68.185 
+Training loss: 0.568, training acc: 71.948; Testing acc: 77.225 
+Training loss: 0.455, training acc: 79.056; Testing acc: 78.980 
+Training loss: 0.381, training acc: 82.948; Testing acc: 86.555 
+Training loss: 0.321, training acc: 86.188; Testing acc: 82.420 

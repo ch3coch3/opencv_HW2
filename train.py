@@ -175,7 +175,7 @@ if __name__ == '__main__':
     model.cuda()
 
     # # tensor board
-    writer = SummaryWriter()
+    writer = SummaryWriter("runs/original")
     # image, labels = next(iter(train_loader))
     # grid = torchvision.utils.make_grid(image)
     # writer.add_image('images',grid,0)
