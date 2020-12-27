@@ -150,8 +150,8 @@ if __name__ == '__main__':
     # # cat_label = temp[3]
 
     train_set, test_set = torch.utils.data.random_split(dataset,[20000,5000])
-    train_loader = DataLoader(dataset=train_set, batch_size=8,shuffle=True,num_workers=4)
-    test_loader = DataLoader(dataset=test_set, batch_size=8, shuffle=True,num_workers=4)
+    train_loader = DataLoader(dataset=train_set, batch_size=32,shuffle=True,num_workers=4)
+    test_loader = DataLoader(dataset=test_set, batch_size=32, shuffle=True,num_workers=4)
     
     model = resnet50(num_classes = 2)
     model.load_state_dict(torch.load('model.pth')['state_dict'])
@@ -159,14 +159,11 @@ if __name__ == '__main__':
     with torch.no_grad():
         for image, label in test_loader:
             outputs = model(image)
-            print(outputs)
             _, predicted = torch.max(torch.abs(outputs), 1)
-            print(outputs)
-            print(predicted)
             choose = predicted[0].item()
             plt.xticks([])
             plt.yticks([])
-            plt.imshow(torchvision.utils.make_grid(image[0]).permute(1,2,0))
+            plt.imshow(torchvision.utils.make_grid(image[0]*0.224+0.456).permute(1,2,0))
             if choose == 1:
                 plt.title('class:'+'cat')
             elif choose == 0:

@@ -11,3 +11,4 @@ CIFAR10
 resnet.ckpt
 runs
 model.pth
+model_increase.pth

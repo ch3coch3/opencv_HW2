@@ -133,7 +133,7 @@ if __name__ == '__main__':
     device = torch.device('cuda'if torch.cuda.is_available() else 'cpu')
     # hyper parameters
     num_epochs = 5
-    batch_size = 8
+    batch_size = 32
     learning_rate = 0.001
 
     # data preprocessor
